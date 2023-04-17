@@ -1,0 +1,285 @@
+import 'dart:io';
+
+import 'package:chat_app/core/blocs/socket/socket_bloc.dart';
+import 'package:chat_app/presentation/chat/bloc/chat_bloc.dart';
+import 'package:chat_app/presentation/login/bloc/login_bloc.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+import 'components/chat_message.dart';
+
+class ChatDePruebaScreen extends StatefulWidget {
+  // final String token;
+  const ChatDePruebaScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ChatDePruebaScreen> createState() => _ChatDePruebaScreenState();
+}
+
+class _ChatDePruebaScreenState extends State<ChatDePruebaScreen>
+// with TickerProviderStateMixin {
+{
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      _cargarHistorial();
+    });
+  }
+
+  void _cargarHistorial() async {
+    final userIdPara = context.read<ChatBloc>().state.userPara!.uid;
+
+    final mensajes = await context.read<ChatBloc>().getChat(userIdPara);
+
+    final history = mensajes.map((m) => ChatMessage(
+          text: m.mensaje,
+          uid: m.de,
+          // animationController: AnimationController(
+          //     vsync: this, duration: const Duration(milliseconds: 0))
+          //   ..forward())
+        ));
+
+    if (mounted) {
+      // Provider.of<MensajesProvider>(context, listen: false).setMensajes =
+      //     history;
+      context.read<ChatBloc>().add(ChatEvent.onSetMensajes(history));
+      // getUserByToken();
+    }
+  }
+
+  // Future<void> getUserByToken() async {
+  //   final user = context.read<LoginBloc>().state.userModel;
+  //   if (user == null) {
+  //     context.read<LoginBloc>().add(LoginEvent.onGetUserByToken(widget.token));
+  //   }
+  // }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        centerTitle: true,
+        elevation: 1,
+        title: BlocBuilder<ChatBloc, ChatState>(
+          builder: (context, state) {
+            return Column(
+              children: [
+                CircleAvatar(
+                  maxRadius: 14,
+                  backgroundColor: Colors.blue[100],
+                  child: Text(
+                    state.userPara!.email.substring(0, 2),
+                    style: const TextStyle(fontSize: 12.0),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  state.userPara!.email,
+                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                )
+              ],
+            );
+          },
+        ),
+      ),
+      body: BlocBuilder<ChatBloc, ChatState>(
+        builder: (context, state) {
+          if (state.historyStatus == HistoryStatus.loading ||
+              state.historyStatus == HistoryStatus.initial) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+          if (state.historyStatus == HistoryStatus.error) {
+            return const Center(
+              child: Text("Error al cargar chat"),
+            );
+          }
+          if (state.historyStatus == HistoryStatus.success) {
+            return Container(
+              child: Column(
+                children: [
+                  Flexible(
+                    child: ListView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: state.mensajes.length,
+                      reverse: true,
+                      itemBuilder: (BuildContext context, int index) {
+                        return state.mensajes[index];
+                      },
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Container(
+                    color: Colors.white,
+                    child: const _InputChat(),
+                  )
+                ],
+              ),
+            );
+          }
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _InputChat extends StatefulWidget {
+  const _InputChat();
+
+  @override
+  State<_InputChat> createState() => _InputChatState();
+}
+
+class _InputChatState extends State<_InputChat> with TickerProviderStateMixin {
+  final _textController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  bool _estaEscribiendo = false;
+  late ChatBloc _mensajesProvider;
+  // late AnimationController _animationController;
+  late SocketBloc _socketService;
+
+  @override
+  void initState() {
+    super.initState();
+    // Provider.of<SockerService>(context, listen: false)
+    //     .getSocket!
+    //     .on('mensaje-personal', _EscucharMensaje);
+    context
+        .read<SocketBloc>()
+        .getSocket!
+        .on('mensaje-personal', _EscucharMensaje);
+  }
+
+  void _EscucharMensaje(dynamic payload) {
+    if (payload['de'] != _mensajesProvider.state.userPara!.uid) return;
+    print("ESCUCHAR MENSAJE: ${payload['mensaje']}");
+    ChatMessage chatMessage = ChatMessage(
+      text: payload['mensaje'],
+      uid: payload['de'],
+      // animationController: AnimationController(
+      //     vsync: this, duration: const Duration(milliseconds: 300))
+    );
+
+    // _mensajesProvider.setMessage = chatMessage;
+    // _mensajesProvider.a
+    _mensajesProvider.add(ChatEvent.onSetMensaje(chatMessage));
+    // chatMessage.animationController?.forward();
+  }
+
+  @override
+  void dispose() {
+    print("BBBBBBBBBBBBBBBBB");
+
+    // for (ChatMessage message in _mensajesProvider.getMessages) {
+    // for (ChatMessage message in _mensajesProvider.state.mensajes) {
+    //   if (mounted) {
+    //     Future.microtask(() => {message.animationController?.dispose()});
+    //   }
+    // }
+
+    if (mounted) {
+      // _socketService.getSocket!.off('mensaje-personal');
+      _socketService.getSocket!.off('mensaje-personal');
+    }
+    super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    print("AAAAAAAAAAAAAAAA");
+    // _mensajesProvider = Provider.of<MensajesProvider>(context, listen: false);
+    _mensajesProvider = context.read<ChatBloc>();
+    // _socketService = Provider.of<SockerService>(context, listen: false);
+    _socketService = context.read<SocketBloc>();
+    super.didChangeDependencies();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8.0),
+        child: Row(
+          children: [
+            Flexible(
+                child: TextField(
+              controller: _textController,
+              onSubmitted: _handleSubmit,
+              onChanged: (value) {
+                setState(() {
+                  // ignore: prefer_is_empty
+                  if (value.trim().length > 0) {
+                    _estaEscribiendo = true;
+                  } else {
+                    _estaEscribiendo = false;
+                  }
+                });
+              },
+              focusNode: _focusNode,
+              decoration:
+                  const InputDecoration.collapsed(hintText: 'Enviar mensaje'),
+            )),
+            Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                child: Platform.isIOS
+                    ? CupertinoButton(
+                        onPressed: !_estaEscribiendo
+                            ? null
+                            : () => _handleSubmit(_textController.text),
+                        child: const Text("Enviar"))
+                    : IconButton(
+                        highlightColor: Colors.transparent,
+                        splashColor: Colors.transparent,
+                        onPressed: !_estaEscribiendo
+                            ? null
+                            : () => _handleSubmit(_textController.text),
+                        icon: Icon(
+                          Icons.send,
+                          color: !_estaEscribiendo
+                              ? Colors.grey
+                              : Colors.blue[400],
+                        )))
+          ],
+        ),
+      ),
+    );
+  }
+
+  _handleSubmit(String texto) {
+    print(texto);
+    if (texto.isEmpty) return;
+
+    _focusNode.requestFocus();
+    _textController.clear();
+    final newMessage = ChatMessage(
+      // uid: Provider.of<AuthService>(context, listen: false).getUsuario!.uid,
+      uid: context.read<LoginBloc>().state.userModel!.usuario.uid,
+      text: texto,
+      // animationController: AnimationController(
+      //     vsync: this, duration: const Duration(milliseconds: 400))
+    );
+    // newMessage.animationController?.forward();
+    // List<ChatMessage> messages =
+    //     Provider.of<MensajesProvider>(context, listen: false).getMessages;
+    // messages.insert(0, newMessage);
+    // _mensajesProvider.setMessage = newMessage;
+    _mensajesProvider.add(ChatEvent.onSetMensaje(newMessage));
+
+    setState(() {
+      _estaEscribiendo = false;
+    });
+    // final yo = Provider.of<AuthService>(context, listen: false).getUsuario;
+    final yo = context.read<LoginBloc>().state.userModel!.usuario;
+    // final para = _mensajesProvider.usuarioPara;
+    final para = _mensajesProvider.state.userPara;
+    _socketService.getEmit('mensaje-personal',
+        {'de': yo.uid, 'para': para!.uid, 'mensaje': texto});
+  }
+}

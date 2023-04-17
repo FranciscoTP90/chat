@@ -1,0 +1,13 @@
+{
+"time": "{date}",
+"@time": {
+  "description": "A message with a date parameter",
+  "placeholders": {
+    "date": {
+      "type": "DateTime",
+      "format": "jm"
+    }
+  }
+}
+
+}
